@@ -1,0 +1,110 @@
+# BioDeploy 配置文件
+# 生信数据库自动化部署系统配置
+
+version: "1.0.0"
+
+# 安装配置
+install:
+  # 默认安装路径
+  default_install_path: ~/bio_databases
+  # 临时文件路径
+  temp_path: /tmp/biodeploy
+  # 是否自动清理临时文件
+  auto_cleanup: true
+  # 是否强制重新安装
+  force_reinstall: false
+  # 是否跳过依赖检查
+  skip_dependencies: false
+
+# 网络配置
+network:
+  # 代理服务器 (例如: http://proxy.example.com:8080)
+  proxy: null
+  # 超时时间 (秒)
+  timeout: 300
+  # 最大重试次数
+  max_retries: 3
+  # 重试延迟 (秒)
+  retry_delay: 5
+  # User-Agent
+  user_agent: "biodeploy/1.0"
+
+# 下载配置
+download:
+  # 最大并发下载数
+  max_parallel: 3
+  # 下载块大小 (字节)
+  chunk_size: 8192
+  # 是否启用断点续传
+  resume_enabled: true
+  # 是否验证校验和
+  verify_checksum: true
+
+# 日志配置
+log:
+  # 日志级别: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: INFO
+  # 日志文件路径
+  log_path: ~/.biodeploy/logs
+  # 日志文件最大大小 (字节)
+  max_size: 104857600  # 100MB
+  # 日志备份数量
+  backup_count: 5
+  # 日志格式
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# 通知配置
+notification:
+  # 是否启用通知
+  enabled: false
+  # 邮件地址
+  email: null
+  # Slack Webhook URL
+  slack_webhook: null
+  # 安装成功时是否通知
+  on_success: true
+  # 安装失败时是否通知
+  on_failure: true
+
+# 镜像源配置
+# 可以为每个数据库配置多个镜像源
+mirrors:
+  ncbi:
+    - https://ftp.ncbi.nlm.nih.gov
+    - https://mirrors.ustc.edu.cn/ncbi
+    - https://mirrors.tuna.tsinghua.edu.cn/ncbi
+  ensembl:
+    - https://ftp.ensembl.org
+    - https://ftp.ebi.ac.uk
+    - https://mirrors.ustc.edu.cn/ensembl
+  ucsc:
+    - https://hgdownload.soe.ucsc.edu
+    - https://mirrors.ustc.edu.cn/ucsc
+
+# 数据库特定配置
+# 可以为每个数据库单独配置参数
+databases:
+  ncbi:
+    default_version: "2024.01"
+    build_indexes: true
+    index_types:
+      - blast
+      - bwa
+    environment_variables:
+      NCBI_DB_PATH: "${install_path}"
+      BLASTDB: "${install_path}/blastdb"
+
+  ensembl:
+    default_version: "110"
+    build_indexes: true
+    index_types:
+      - bwa
+      - hisat2
+    environment_variables:
+      ENSEMBL_DB_PATH: "${install_path}"
+
+  ucsc:
+    default_version: "hg38"
+    build_indexes: false
+    environment_variables:
+      UCSC_DB_PATH: "${install_path}"
