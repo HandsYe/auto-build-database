@@ -15,11 +15,9 @@ pydantic>=2.0.0
 # File handling
 pathlib2>=2.3.0; python_version < "3.10"
 
-# Checksum and crypto
-hashlib>=3.6; python_version >= "3.6"
+# Checksum and crypto (hashlib is part of Python standard library)
 
 # Process management
 psutil>=5.9.0
 
-# Async support
-asyncio>=3.4; python_version < "3.7"
+# Async support (asyncio is part of Python standard library)
