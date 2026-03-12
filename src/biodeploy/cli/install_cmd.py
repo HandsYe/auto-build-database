@@ -11,7 +11,7 @@ import click
 
 from biodeploy.core.installation_manager import InstallationManager
 from biodeploy.infrastructure.config_manager import ConfigManager
-from biodeploy.infrastructure.logger import logger
+from biodeploy.infrastructure.logger import get_logger
 
 
 @click.command(name="install")

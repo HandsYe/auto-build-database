@@ -8,7 +8,7 @@ import shutil
 import subprocess
 from typing import Any, Dict, List, Optional, Tuple
 
-from biodeploy.infrastructure.logger import logger
+from biodeploy.infrastructure.logger import get_logger
 
 
 class DependencyManager:
@@ -103,7 +103,7 @@ class DependencyManager:
     }
 
     def __init__(self):
-        self._logger = logger.get_logger("dependency_manager")
+        self._logger = get_logger("dependency_manager")
 
     def check_dependency(self, name: str) -> bool:
         """检查单个依赖是否可用

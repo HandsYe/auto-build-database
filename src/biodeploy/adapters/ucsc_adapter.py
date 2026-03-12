@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict, List, Optional
 from biodeploy.adapters.adapter_registry import register_adapter
 from biodeploy.adapters.base_adapter import BaseAdapter
 from biodeploy.infrastructure.filesystem import FileSystem
-from biodeploy.infrastructure.logger import logger
+from biodeploy.infrastructure.logger import get_logger
 from biodeploy.models.metadata import DatabaseMetadata, DownloadSource
 from biodeploy.services.download_service import DownloadService
 
@@ -44,7 +44,7 @@ class UCSCAdapter(BaseAdapter):
         """
         self.db_name = db_name
         self.genome = genome
-        self._logger = logger.get_logger("ucsc_adapter")
+        self._logger = get_logger("ucsc_adapter")
         self._download_service = DownloadService()
 
     @property

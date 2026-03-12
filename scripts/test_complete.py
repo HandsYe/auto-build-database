@@ -141,11 +141,12 @@ def test_infrastructure():
 
             # 创建测试记录
             from biodeploy.models import InstallationRecord, InstallationStatus
+            from datetime import datetime
             record = InstallationRecord(
                 name="test",
                 version="1.0",
                 install_path=Path("/tmp/test"),
-                install_time="2025-03-11T10:00:00",
+                install_time=datetime.now(),
                 status=InstallationStatus.COMPLETED,
             )
 

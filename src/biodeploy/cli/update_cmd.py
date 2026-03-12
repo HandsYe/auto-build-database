@@ -9,7 +9,7 @@ from typing import Optional
 import click
 
 from biodeploy.core.update_manager import UpdateManager
-from biodeploy.infrastructure.logger import logger
+from biodeploy.infrastructure.logger import get_logger
 
 
 @click.command(name="update")

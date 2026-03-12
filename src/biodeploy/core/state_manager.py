@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from biodeploy.infrastructure.logger import logger
+from biodeploy.infrastructure.logger import get_logger
 from biodeploy.infrastructure.state_storage import StateStorage
 from biodeploy.models.state import InstallationRecord, InstallationStatus
 
@@ -26,7 +26,7 @@ class StateManager:
             state_path: 状态文件路径
         """
         self._storage = StateStorage(state_path)
-        self._logger = logger.get_logger("state_manager")
+        self._logger = get_logger("state_manager")
 
     def get_installed_databases(self) -> List[InstallationRecord]:
         """获取所有已安装的数据库

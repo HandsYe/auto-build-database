@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from biodeploy.infrastructure.logger import logger
+from biodeploy.infrastructure.logger import get_logger
 from biodeploy.models.state import InstallationRecord
 
 
@@ -26,7 +26,7 @@ class EnvironmentService:
     }
 
     def __init__(self):
-        self._logger = logger.get_logger("environment_service")
+        self._logger = get_logger("environment_service")
 
     def set_environment(
         self,

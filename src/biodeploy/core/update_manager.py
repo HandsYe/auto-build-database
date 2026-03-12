@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from biodeploy.adapters.adapter_registry import AdapterRegistry
 from biodeploy.adapters.base_adapter import BaseAdapter
 from biodeploy.infrastructure.filesystem import FileSystem
-from biodeploy.infrastructure.logger import logger
+from biodeploy.infrastructure.logger import get_logger
 from biodeploy.models.state import InstallationRecord, InstallationStatus
 from biodeploy.core.state_manager import StateManager
 
@@ -47,7 +47,7 @@ class UpdateManager:
         """
         self._state_manager = state_manager or StateManager()
         self._registry = registry or AdapterRegistry()
-        self._logger = logger.get_logger("update_manager")
+        self._logger = get_logger("update_manager")
 
     def check_update(self, name: str) -> Optional[UpdateInfo]:
         """检查单个数据库是否有更新

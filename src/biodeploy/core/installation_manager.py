@@ -14,7 +14,7 @@ from biodeploy.adapters.base_adapter import BaseAdapter
 from biodeploy.core.dependency_manager import DependencyManager
 from biodeploy.core.state_manager import StateManager
 from biodeploy.infrastructure.filesystem import FileSystem
-from biodeploy.infrastructure.logger import logger
+from biodeploy.infrastructure.logger import get_logger
 from biodeploy.models.state import InstallationRecord, InstallationStatus
 from biodeploy.services.checksum_service import ChecksumService
 from biodeploy.services.config_generation_service import ConfigGenerationService
@@ -50,7 +50,7 @@ class InstallationManager:
         self._env_service = EnvironmentService()
         self._config_gen = ConfigGenerationService()
         self._dep_manager = DependencyManager()
-        self._logger = logger.get_logger("installation_manager")
+        self._logger = get_logger("installation_manager")
 
     def install(
         self,

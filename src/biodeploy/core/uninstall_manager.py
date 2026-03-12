@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from biodeploy.adapters.adapter_registry import AdapterRegistry
 from biodeploy.infrastructure.filesystem import FileSystem
-from biodeploy.infrastructure.logger import logger
+from biodeploy.infrastructure.logger import get_logger
 from biodeploy.models.state import InstallationRecord, InstallationStatus
 from biodeploy.services.environment_service import EnvironmentService
 from biodeploy.core.state_manager import StateManager
@@ -35,7 +35,7 @@ class UninstallManager:
         self._state_manager = state_manager or StateManager()
         self._registry = registry or AdapterRegistry()
         self._env_service = EnvironmentService()
-        self._logger = logger.get_logger("uninstall_manager")
+        self._logger = get_logger("uninstall_manager")
 
     def uninstall(
         self,
