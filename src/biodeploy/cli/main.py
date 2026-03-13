@@ -116,15 +116,50 @@ def install(
         "no_env": no_env,
     }
 
-    # TODO: 调用安装管理器
-    click.echo(f"准备安装以下数据库: {', '.join(databases)}")
-    click.echo(f"安装路径: {options['path']}")
-    click.echo(f"并发数: {parallel}")
-
-    if force:
-        click.echo("强制重新安装: 是")
-
-    click.echo("\n安装功能正在开发中...")
+    # 调用安装管理器
+    try:
+        from biodeploy.core.installation_manager import InstallationManager
+        
+        manager = InstallationManager(install_path=Path(options["path"]))
+        
+        click.echo(f"准备安装以下数据库: {', '.join(databases)}")
+        click.echo(f"安装路径: {options['path']}")
+        click.echo(f"并发数: {parallel}")
+        
+        if force:
+            click.echo("强制重新安装: 是")
+        
+        # 定义进度回调
+        def progress_callback(message: str, progress: float):
+            if progress < 1.0:
+                click.echo(f"[{progress*100:.0f}%] {message}")
+        
+        # 执行安装
+        success_count = 0
+        for db in databases:
+            click.echo(f"\n正在安装: {db}")
+            try:
+                success = manager.install(
+                    database=db,
+                    version=version,
+                    install_path=Path(options["path"]) / db if path else None,
+                    options=options,
+                    progress_callback=progress_callback,
+                )
+                if success:
+                    click.echo(f"✓ {db} 安装成功")
+                    success_count += 1
+                else:
+                    click.echo(f"✗ {db} 安装失败", err=True)
+            except Exception as e:
+                click.echo(f"✗ {db} 安装失败: {e}", err=True)
+        
+        click.echo(f"\n安装完成: {success_count}/{len(databases)} 成功")
+        
+    except Exception as e:
+        logger.error(f"安装失败: {e}")
+        click.echo(f"安装失败: {e}", err=True)
+        ctx.exit(1)
 
 
 @cli.command()
@@ -156,11 +191,69 @@ def update(
     else:
         logger.info("检查所有数据库的更新")
 
-    # TODO: 调用更新管理器
-    if check_only:
-        click.echo("仅检查更新模式")
-    else:
-        click.echo("更新功能正在开发中...")
+    # 调用更新管理器
+    try:
+        from biodeploy.core.update_manager import UpdateManager
+        from biodeploy.core.state_manager import StateManager
+        
+        manager = UpdateManager()
+        state_manager = StateManager()
+        
+        if check_only:
+            click.echo("检查更新模式")
+            
+            # 获取已安装的数据库
+            installed = state_manager.get_installed_databases()
+            
+            if not installed:
+                click.echo("没有已安装的数据库")
+                return
+            
+            click.echo(f"\n已安装的数据库:")
+            for record in installed:
+                click.echo(f"  - {record.name} ({record.version})")
+                
+                # 检查更新
+                try:
+                    latest = manager.check_latest_version(record.name)
+                    if latest and latest != record.version:
+                        click.echo(f"    有新版本可用: {latest}")
+                    else:
+                        click.echo(f"    已是最新版本")
+                except Exception as e:
+                    click.echo(f"    检查失败: {e}")
+        else:
+            click.echo("更新功能正在执行...")
+            
+            # 获取要更新的数据库列表
+            if databases:
+                db_list = list(databases)
+            else:
+                installed = state_manager.get_installed_databases()
+                db_list = [r.name for r in installed]
+            
+            success_count = 0
+            for db in db_list:
+                click.echo(f"\n正在更新: {db}")
+                try:
+                    success = manager.update(
+                        database=db,
+                        options={"keep_old": keep_old}
+                    )
+                    if success:
+                        click.echo(f"✓ {db} 更新成功")
+                        success_count += 1
+                    else:
+                        click.echo(f"✗ {db} 更新失败", err=True)
+                except Exception as e:
+                    click.echo(f"✗ {db} 更新失败: {e}", err=True)
+            
+            click.echo(f"\n更新完成: {success_count}/{len(db_list)} 成功")
+            
+    except Exception as e:
+        logger.error(f"更新失败: {e}")
+        click.echo(f"更新失败: {e}", err=True)
+        ctx.exit(1)
 
 
 @cli.command()
@@ -189,18 +282,53 @@ def list(
     """
     logger = ctx.obj["logger"]
 
-    # TODO: 调用状态管理器获取数据库列表
-    click.echo("数据库列表功能正在开发中...")
-
-    # 示例输出
-    if installed:
-        click.echo("\n已安装的数据库:")
-        click.echo("  (暂无)")
-    else:
-        click.echo("\n可用的数据库:")
-        click.echo("  - ncbi (NCBI数据库)")
-        click.echo("  - ensembl (Ensembl数据库)")
-        click.echo("  - ucsc (UCSC数据库)")
+    # 调用状态管理器获取数据库列表
+    try:
+        from biodeploy.core.state_manager import StateManager
+        from biodeploy.adapters.adapter_registry import AdapterRegistry
+        
+        state_manager = StateManager()
+        registry = AdapterRegistry()
+        
+        if installed:
+            # 显示已安装的数据库
+            installed_dbs = state_manager.get_installed_databases()
+            
+            if not installed_dbs:
+                click.echo("没有已安装的数据库")
+                return
+            
+            click.echo("\n已安装的数据库:")
+            for record in installed_dbs:
+                status_icon = "✓" if record.status.value == "completed" else "✗"
+                click.echo(f"  {status_icon} {record.name} ({record.version})")
+                click.echo(f"      路径: {record.install_path}")
+                click.echo(f"      状态: {record.status.value}")
+        else:
+            # 显示可用的数据库
+            available = registry.list_adapters()
+            
+            if not available:
+                click.echo("没有可用的数据库适配器")
+                return
+            
+            click.echo("\n可用的数据库:")
+            for db_name in available:
+                try:
+                    adapter = registry.get(db_name)
+                    if adapter:
+                        metadata = adapter.get_metadata()
+                        click.echo(f"  - {db_name}")
+                        click.echo(f"      名称: {metadata.display_name}")
+                        click.echo(f"      描述: {metadata.description}")
+                        click.echo(f"      大小: {metadata.size / (1024**3):.2f} GB")
+                except Exception as e:
+                    click.echo(f"  - {db_name} (信息获取失败)")
+                    
+    except Exception as e:
+        logger.error(f"获取数据库列表失败: {e}")
+        click.echo(f"获取数据库列表失败: {e}", err=True)
+        ctx.exit(1)
 
 
 @cli.command()
@@ -235,8 +363,34 @@ def remove(
             click.echo("取消卸载")
             return
 
-    # TODO: 调用卸载管理器
-    click.echo(f"卸载功能正在开发中...")
+    # 调用卸载管理器
+    try:
+        from biodeploy.core.uninstall_manager import UninstallManager
+        
+        manager = UninstallManager()
+        
+        success_count = 0
+        for db in databases:
+            click.echo(f"\n正在卸载: {db}")
+            try:
+                success = manager.uninstall(
+                    database=db,
+                    options={"keep_config": keep_config, "force": force}
+                )
+                if success:
+                    click.echo(f"✓ {db} 卸载成功")
+                    success_count += 1
+                else:
+                    click.echo(f"✗ {db} 卸载失败", err=True)
+            except Exception as e:
+                click.echo(f"✗ {db} 卸载失败: {e}", err=True)
+        
+        click.echo(f"\n卸载完成: {success_count}/{len(databases)} 成功")
+        
+    except Exception as e:
+        logger.error(f"卸载失败: {e}")
+        click.echo(f"卸载失败: {e}", err=True)
+        ctx.exit(1)
 
 
 @cli.command()
@@ -266,8 +420,82 @@ def status(
     else:
         logger.info("查看所有数据库状态")
 
-    # TODO: 调用状态管理器
-    click.echo("状态查询功能正在开发中...")
+    # 调用状态管理器
+    try:
+        from biodeploy.core.state_manager import StateManager
+        import json as json_module
+        
+        state_manager = StateManager()
+        
+        if database:
+            # 查看指定数据库的状态
+            record = state_manager.get_database_info(database)
+            
+            if not record:
+                click.echo(f"数据库 {database} 未安装")
+                return
+            
+            if json_output:
+                # JSON格式输出
+                data = {
+                    "name": record.name,
+                    "version": record.version,
+                    "status": record.status.value,
+                    "install_path": str(record.install_path),
+                    "install_time": record.install_time.isoformat(),
+                }
+                click.echo(json_module.dumps(data, indent=2, ensure_ascii=False))
+            else:
+                # 文本格式输出
+                click.echo(f"\n数据库: {record.name}")
+                click.echo(f"版本: {record.version}")
+                click.echo(f"状态: {record.status.value}")
+                click.echo(f"安装路径: {record.install_path}")
+                click.echo(f"安装时间: {record.install_time}")
+                
+                if detail:
+                    click.echo(f"\n详细信息:")
+                    click.echo(f"  文件数量: {record.file_count}")
+                    click.echo(f"  总大小: {record.total_size / (1024**3):.2f} GB")
+                    if record.indexes:
+                        click.echo(f"  已构建索引: {', '.join(record.indexes)}")
+        else:
+            # 查看所有数据库的状态
+            all_dbs = state_manager.get_installed_databases()
+            
+            if not all_dbs:
+                click.echo("没有已安装的数据库")
+                return
+            
+            if json_output:
+                # JSON格式输出
+                data = [
+                    {
+                        "name": r.name,
+                        "version": r.version,
+                        "status": r.status.value,
+                        "install_path": str(r.install_path),
+                    }
+                    for r in all_dbs
+                ]
+                click.echo(json_module.dumps(data, indent=2, ensure_ascii=False))
+            else:
+                # 文本格式输出
+                click.echo("\n已安装的数据库:")
+                for record in all_dbs:
+                    status_icon = "✓" if record.status.value == "completed" else "✗"
+                    click.echo(f"  {status_icon} {record.name} ({record.version})")
+                    click.echo(f"      状态: {record.status.value}")
+                    click.echo(f"      路径: {record.install_path}")
+                    
+                    if detail:
+                        click.echo(f"      安装时间: {record.install_time}")
+                        click.echo(f"      大小: {record.total_size / (1024**3):.2f} GB")
+                    
+    except Exception as e:
+        logger.error(f"查询状态失败: {e}")
+        click.echo(f"查询状态失败: {e}", err=True)
+        ctx.exit(1)
 
 
 if __name__ == "__main__":

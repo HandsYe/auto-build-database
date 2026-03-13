@@ -34,7 +34,7 @@ class StateManager:
         Returns:
             已安装数据库列表
         """
-        return self._storage.get_installed_databases()
+        return self._storage.load()
 
     def get_database_info(
         self,
