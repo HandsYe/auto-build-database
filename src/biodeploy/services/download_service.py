@@ -1,14 +1,17 @@
 """
 下载服务
 
-提供文件下载功能，支持多源下载、断点续传等。
+提供文件下载功能，支持多源下载、断点续传、异步下载等。
 """
 
+import asyncio
 import time
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, AsyncGenerator
 
+import aiohttp
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -311,3 +314,173 @@ class DownloadService:
     def close(self) -> None:
         """关闭会话"""
         self.session.close()
+
+    @contextmanager
+    def session_context(self) -> 'DownloadService':
+        """会话上下文管理器
+        
+        Yields:
+            DownloadService实例
+        """
+        try:
+            yield self
+        finally:
+            self.close()
+
+    async def async_download(
+        self,
+        sources: List[DownloadSource],
+        target_path: Path,
+        options: Optional[Dict[str, Any]] = None,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+    ) -> DownloadResult:
+        """异步下载文件
+        
+        Args:
+            sources: 下载源列表
+            target_path: 目标文件路径
+            options: 下载选项
+            progress_callback: 进度回调函数
+            
+        Returns:
+            下载结果
+        """
+        options = options or {}
+        start_time = time.time()
+        
+        # 按优先级排序下载源
+        sorted_sources = sorted(sources, key=lambda x: x.priority)
+        
+        # 尝试从每个源下载
+        for attempt, source in enumerate(sorted_sources):
+            self.logger.info(
+                f"异步下载尝试 (尝试 {attempt + 1}/{len(sorted_sources)}): {source.url}"
+            )
+            
+            try:
+                result = await self._async_download_from_source(
+                    source, target_path, options, progress_callback
+                )
+                
+                if result.success:
+                    result.elapsed_time = time.time() - start_time
+                    return result
+                    
+            except Exception as e:
+                self.logger.warning(f"异步下载失败 {source.url}: {e}")
+                continue
+        
+        # 所有源都失败
+        elapsed_time = time.time() - start_time
+        return DownloadResult(
+            success=False,
+            file_path=None,
+            downloaded_size=0,
+            elapsed_time=elapsed_time,
+            error_message="所有下载源都失败",
+        )
+
+    async def _async_download_from_source(
+        self,
+        source: DownloadSource,
+        target_path: Path,
+        options: Dict[str, Any],
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+    ) -> DownloadResult:
+        """异步从单个源下载文件
+        
+        Args:
+            source: 下载源
+            target_path: 目标文件路径
+            options: 下载选项
+            progress_callback: 进度回调函数
+            
+        Returns:
+            下载结果
+        """
+        target_path = Path(target_path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # 检查是否支持断点续传
+        resume_enabled = options.get("resume_enabled", True)
+        downloaded_size = 0
+        
+        if resume_enabled and target_path.exists():
+            downloaded_size = target_path.stat().st_size
+            self.logger.info(f"检测到部分下载的文件，已下载 {downloaded_size} 字节")
+        
+        # 设置请求头
+        headers = {}
+        if downloaded_size > 0:
+            headers["Range"] = f"bytes={downloaded_size}-"
+        
+        timeout = aiohttp.ClientTimeout(total=self.timeout)
+        
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(source.url, headers=headers) as response:
+                    # 检查响应状态
+                    if response.status not in [200, 206]:
+                        raise DownloadError(
+                            f"HTTP错误: {response.status}",
+                            ErrorCode.DOWNLOAD_FAILED,
+                            {"url": source.url, "status_code": response.status},
+                        )
+                    
+                    # 获取文件总大小
+                    total_size = int(response.headers.get("content-length", 0))
+                    if response.status == 206:
+                        content_range = response.headers.get("content-range", "")
+                        if content_range:
+                            total_size = int(content_range.split("/")[-1])
+                    elif downloaded_size > 0:
+                        downloaded_size = 0
+                    
+                    self.logger.info(f"开始异步下载，总大小: {total_size} 字节")
+                    
+                    # 下载文件
+                    mode = "ab" if downloaded_size > 0 and response.status == 206 else "wb"
+                    with open(target_path, mode) as f:
+                        async for chunk in response.content.iter_chunked(self.chunk_size):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded_size += len(chunk)
+                                
+                                if progress_callback:
+                                    progress_callback(downloaded_size, total_size)
+                    
+                    # 验证文件大小
+                    if total_size > 0 and downloaded_size != total_size:
+                        raise DownloadError(
+                            f"文件大小不匹配: 期望 {total_size}，实际 {downloaded_size}",
+                            ErrorCode.DOWNLOAD_FAILED,
+                            {"expected": total_size, "actual": downloaded_size},
+                        )
+                    
+                    self.logger.info(f"异步下载完成: {target_path}")
+                    
+                    return DownloadResult(
+                        success=True,
+                        file_path=target_path,
+                        downloaded_size=downloaded_size,
+                        elapsed_time=0.0,
+                    )
+                    
+        except asyncio.TimeoutError:
+            raise DownloadError(
+                f"下载超时: {source.url}",
+                ErrorCode.DOWNLOAD_TIMEOUT,
+                {"url": source.url, "timeout": self.timeout},
+            )
+        except aiohttp.ClientError as e:
+            raise DownloadError(
+                f"网络错误: {e}",
+                ErrorCode.DOWNLOAD_NETWORK_ERROR,
+                {"url": source.url, "error": str(e)},
+            )
+        except Exception as e:
+            raise DownloadError(
+                f"下载失败: {e}",
+                ErrorCode.DOWNLOAD_FAILED,
+                {"url": source.url, "error": str(e)},
+            )

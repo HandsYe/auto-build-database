@@ -5,9 +5,10 @@
 """
 
 import shutil
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Generator
 
 from biodeploy.adapters.adapter_registry import AdapterRegistry
 from biodeploy.adapters.base_adapter import BaseAdapter
@@ -16,6 +17,7 @@ from biodeploy.core.state_manager import StateManager
 from biodeploy.infrastructure.filesystem import FileSystem
 from biodeploy.infrastructure.logger import get_logger
 from biodeploy.models.state import InstallationRecord, InstallationStatus
+from biodeploy.models.errors import InstallError, ErrorCode
 from biodeploy.services.checksum_service import ChecksumService
 
 from biodeploy.services.download_service import DownloadService
@@ -367,5 +369,81 @@ class InstallationManager:
         if callback:
             try:
                 callback(message, progress)
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.warning(f"进度回调失败: {e}")
+
+    @contextmanager
+    def _installation_context(
+        self,
+        database: str,
+        version: str,
+        temp_path: Path,
+    ) -> Generator[Path, None, None]:
+        """安装上下文管理器
+        
+        确保临时文件在安装失败时被清理
+        
+        Args:
+            database: 数据库名称
+            version: 数据库版本
+            temp_path: 临时文件路径
+            
+        Yields:
+            临时文件路径
+        """
+        try:
+            # 确保临时目录存在
+            temp_path.parent.mkdir(parents=True, exist_ok=True)
+            yield temp_path
+        except Exception as e:
+            self._logger.error(f"安装过程中发生错误: {e}")
+            # 清理临时文件
+            if temp_path.exists():
+                try:
+                    FileSystem.safe_remove(temp_path)
+                    self._logger.info(f"已清理临时文件: {temp_path}")
+                except Exception as cleanup_error:
+                    self._logger.warning(f"清理临时文件失败: {cleanup_error}")
+            raise
+        finally:
+            # 确保下载服务会话被关闭
+            if hasattr(self._download_service, 'close'):
+                try:
+                    self._download_service.close()
+                except Exception as e:
+                    self._logger.warning(f"关闭下载服务失败: {e}")
+
+    def _handle_installation_error(
+        self,
+        error: Exception,
+        record: InstallationRecord,
+        step: str,
+    ) -> None:
+        """处理安装错误
+        
+        Args:
+            error: 异常对象
+            record: 安装记录
+            step: 当前步骤
+        """
+        error_message = f"{step}失败: {str(error)}"
+        
+        # 根据错误类型设置不同的错误详情
+        error_details = {
+            "step": step,
+            "error_type": type(error).__name__,
+            "error_message": str(error),
+        }
+        
+        # 如果是自定义错误，添加更多详情
+        if isinstance(error, InstallError):
+            error_details["error_code"] = error.error_code.value if error.error_code else None
+            error_details["context"] = error.details
+        
+        record.set_error(error_message, error_details)
+        self._state_manager.save_record(record)
+        
+        self._logger.error(
+            f"安装失败 [{record.name} {record.version}]: {error_message}",
+            exc_info=True,
+        )

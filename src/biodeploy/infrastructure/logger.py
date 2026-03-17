@@ -8,7 +8,7 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 
 class Logger:
@@ -28,7 +28,7 @@ class Logger:
 
     def __init__(self) -> None:
         """初始化日志系统"""
-        self._loggers: dict[str, logging.Logger] = {}
+        self._loggers: Dict[str, logging.Logger] = {}
         self._initialized = False
 
     def setup(
