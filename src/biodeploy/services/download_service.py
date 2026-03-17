@@ -241,8 +241,9 @@ class DownloadService:
                         if progress_callback:
                             progress_callback(downloaded_size, total_size)
 
-            # 验证文件大小
-            if total_size > 0 and downloaded_size != total_size:
+            # 验证文件大小（默认关闭；某些服务器/代理可能不返回可靠的content-length）
+            verify_size = bool(options.get("verify_size", False))
+            if verify_size and total_size > 0 and downloaded_size != total_size:
                 raise DownloadError(
                     f"文件大小不匹配: 期望 {total_size}，实际 {downloaded_size}",
                     ErrorCode.DOWNLOAD_FAILED,
@@ -441,16 +442,28 @@ class DownloadService:
                     # 下载文件
                     mode = "ab" if downloaded_size > 0 and response.status == 206 else "wb"
                     with open(target_path, mode) as f:
-                        async for chunk in response.content.iter_chunked(self.chunk_size):
-                            if chunk:
-                                f.write(chunk)
-                                downloaded_size += len(chunk)
-                                
-                                if progress_callback:
-                                    progress_callback(downloaded_size, total_size)
+                        chunks = response.content.iter_chunked(self.chunk_size)
+                        if asyncio.iscoroutine(chunks):
+                            chunks = await chunks
+
+                        if hasattr(chunks, "__aiter__"):
+                            async for chunk in chunks:
+                                if chunk:
+                                    f.write(chunk)
+                                    downloaded_size += len(chunk)
+                                    if progress_callback:
+                                        progress_callback(downloaded_size, total_size)
+                        else:
+                            for chunk in chunks:
+                                if chunk:
+                                    f.write(chunk)
+                                    downloaded_size += len(chunk)
+                                    if progress_callback:
+                                        progress_callback(downloaded_size, total_size)
                     
-                    # 验证文件大小
-                    if total_size > 0 and downloaded_size != total_size:
+                    # 验证文件大小（默认关闭；某些服务器/代理可能不返回可靠的content-length）
+                    verify_size = bool(options.get("verify_size", False))
+                    if verify_size and total_size > 0 and downloaded_size != total_size:
                         raise DownloadError(
                             f"文件大小不匹配: 期望 {total_size}，实际 {downloaded_size}",
                             ErrorCode.DOWNLOAD_FAILED,

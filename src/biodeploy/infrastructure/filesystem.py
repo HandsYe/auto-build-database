@@ -43,8 +43,12 @@ class FileSystem:
             包含磁盘使用情况的字典，包括 total, used, free 字段
         """
         path = Path(path)
-        if not path.exists():
-            path = path.parent
+        # 向上回退到一个实际存在的目录，避免对不存在路径调用 disk_usage 抛错
+        while not path.exists():
+            parent = path.parent
+            if parent == path:
+                break
+            path = parent
 
         usage = shutil.disk_usage(path)
         return {

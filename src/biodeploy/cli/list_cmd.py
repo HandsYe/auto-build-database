@@ -36,6 +36,12 @@ from biodeploy.core.state_manager import StateManager
     "--filter",
     help="按标签过滤",
 )
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(dir_okay=False, writable=True),
+    help="输出到文件（默认输出到stdout）",
+)
 @click.pass_context
 def list_cmd(
     ctx: click.Context,
@@ -43,6 +49,7 @@ def list_cmd(
     available: bool,
     format: str,
     filter: Optional[str],
+    output: Optional[str],
 ) -> None:
     """列出数据库
 
@@ -99,19 +106,27 @@ def list_cmd(
                     })
 
     # 输出结果
+    def emit(text: str) -> None:
+        if output:
+            from pathlib import Path
+
+            Path(output).write_text(text + "\n", encoding="utf-8")
+        else:
+            click.echo(text)
+
     if format == "json":
         import json
-        click.echo(json.dumps(output_data, indent=2, ensure_ascii=False))
+        emit(json.dumps(output_data, indent=2, ensure_ascii=False))
     elif format == "yaml":
         try:
             import yaml
-            click.echo(yaml.dump(output_data, allow_unicode=True))
+            emit(yaml.dump(output_data, allow_unicode=True, sort_keys=False))
         except ImportError:
-            click.echo("YAML support requires PyYAML")
+            raise RuntimeError("YAML 输出需要安装 PyYAML")
     else:
         # 表格格式
         if not output_data:
-            click.echo("没有数据库")
+            emit("没有数据库")
             return
 
         # 计算列宽
@@ -126,8 +141,7 @@ def list_cmd(
             f"{'状态':<{status_width}} "
             f"{'描述/路径'}"
         )
-        click.echo(header)
-        click.echo("-" * len(header))
+        lines = [header, "-" * len(header)]
 
         # 打印数据
         for db in output_data:
@@ -137,10 +151,8 @@ def list_cmd(
 
             if status == "installed":
                 desc = str(db.get("path", ""))
-                status_color = "green"
             else:
                 desc = str(db.get("description", ""))
-                status_color = "blue"
 
             # 截断描述
             if len(desc) > 50:
@@ -149,7 +161,8 @@ def list_cmd(
             line = (
                 f"{name:<{name_width}} "
                 f"{version:<{version_width}} "
+                f"{status:<{status_width}} "
             )
-            click.echo(line, nl=False)
-            click.secho(f"{status:<{status_width}} ", fg=status_color, nl=False)
-            click.echo(desc)
+            lines.append(f"{line}{desc}")
+
+        emit("\n".join(lines))

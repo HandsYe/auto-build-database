@@ -56,7 +56,7 @@ def update(
         biodeploy update ncbi ensembl --keep-old
         biodeploy update --parallel 2
     """
-    log = logger.get_logger("cli.update")
+    log = ctx.obj.get("logger") or get_logger("cli.update")
     manager = UpdateManager()
 
     # 构建选项

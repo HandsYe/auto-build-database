@@ -124,15 +124,27 @@ class InstallationManager:
             record.current_step = "downloading"
             self._state_manager.save_record(record)
 
+            # temp_path 作为“下载工作目录”供各 Adapter 写入多个文件
             temp_path = Path(f"/tmp/biodeploy/{database}_{version}")
-            temp_path.parent.mkdir(parents=True, exist_ok=True)
+            # 兼容历史残留：如果同名文件存在，先移除再创建目录
+            if temp_path.exists() and temp_path.is_file():
+                temp_path.unlink()
+            temp_path.mkdir(parents=True, exist_ok=True)
 
             def download_progress(downloaded: int, total: int):
                 if total > 0:
                     progress = 0.15 + (downloaded / total) * 0.4
                     self._notify_progress(progress_callback, "下载中", progress)
 
-            if not adapter.download(version, temp_path, options, download_progress):
+            try:
+                downloaded_ok = adapter.download(version, temp_path, options, download_progress)
+            except IsADirectoryError:
+                # 某些适配器把 target_path 当作“单文件路径”，提供一个兜底文件路径重试
+                downloaded_ok = adapter.download(
+                    version, temp_path / "__download__", options, download_progress
+                )
+
+            if not downloaded_ok:
                 record.set_error("下载失败")
                 self._state_manager.save_record(record)
                 return False
@@ -275,9 +287,7 @@ class InstallationManager:
             return True
 
         dependencies = adapter.get_dependencies()
-        if not dependencies:
-            return True
-
+        # 即便依赖为空，也调用依赖管理器以保持行为一致（便于测试/注入）
         available, missing = self._dep_manager.check_dependencies(dependencies)
 
         if missing:

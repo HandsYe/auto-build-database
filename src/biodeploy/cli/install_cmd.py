@@ -83,7 +83,7 @@ def install(
         biodeploy install ncbi ensembl --parallel 2
     """
     config = ctx.obj["config"]
-    log = logger.get_logger("cli.install")
+    log = ctx.obj.get("logger") or get_logger("cli.install")
 
     # 构建安装选项
     options = {

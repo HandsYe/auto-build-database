@@ -40,6 +40,12 @@ biodeploy list
 
 # 以 JSON 格式输出
 biodeploy list --format json
+
+# 仅列出“可下载”的数据库变体，并导出到文件（便于脚本化）
+biodeploy list --available --format json -o biodeploy-catalog.json
+
+# 更推荐：直接用 catalog 命令输出“可下载数据库清单”
+biodeploy catalog -f json -o biodeploy-catalog.json
 ```
 
 ### 查看已安装数据库
@@ -154,6 +160,40 @@ biodeploy status eggnog_eggnog --detail
 
 # 检查所有已安装数据库
 biodeploy list --installed
+```
+
+## 一键验证（推荐新环境先跑）
+
+```bash
+# 仅本地自检（不联网）
+biodeploy smoke-test
+
+# 真实下载并安装一个小数据库（默认 go），验证下载/安装链路
+biodeploy smoke-test --download
+
+# 指定数据库与安装路径，并保留产物
+biodeploy smoke-test --download -d cog -p ~/bio_databases --keep
+```
+
+## 常用可下载数据库示例（可直接 install）
+
+```bash
+# NCBI
+biodeploy install ncbi_refseq_protein
+biodeploy install ncbi_refseq_genomic
+biodeploy install ncbi_genbank
+
+# KEGG
+biodeploy install kegg_full
+biodeploy install kegg_pathway
+
+# eggNOG
+biodeploy install eggnog_eggnog
+biodeploy install eggnog_bacteria
+
+# UCSC（常用基因组）
+biodeploy install ucsc_genome_hg38
+biodeploy install ucsc_genome_hg19
 ```
 
 ## 故障排除

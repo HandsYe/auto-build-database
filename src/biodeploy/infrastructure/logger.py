@@ -63,8 +63,8 @@ class Logger:
         # 创建格式化器
         formatter = logging.Formatter(log_format or self.DEFAULT_FORMAT)
 
-        # 添加控制台处理器
-        console_handler = logging.StreamHandler(sys.stdout)
+        # 添加控制台处理器（写到stderr，避免污染CLI的结构化输出，如JSON/YAML）
+        console_handler = logging.StreamHandler(sys.stderr)
         console_handler.setLevel(getattr(logging, level.upper()))
         console_handler.setFormatter(formatter)
         root_logger.addHandler(console_handler)

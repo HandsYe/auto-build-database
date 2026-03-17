@@ -123,14 +123,18 @@ mirrors:
 ## 🧪 测试
 
 ```bash
-# 运行项目验证
+# 离线项目验证（不联网）
 python scripts/verify_project.py
 
-# 运行完整测试
-python scripts/test_complete.py
+# 单元测试
+pytest
 
-# 运行功能演示
-python examples/quick_demo.py
+# 一键实际验证（联网时可加 --download 跑通下载/安装链路）
+biodeploy smoke-test
+biodeploy smoke-test --download
+
+# 全量下载链路探测（轻量，不做全量下载）
+biodeploy link-test --all -f json -o link-test-report.json
 ```
 
 ## 📊 项目状态

@@ -2,7 +2,17 @@
 
 ## 已实现的数据库适配器
 
-以下是 BioDeploy 工具支持的所有数据库，可以直接使用 `biodeploy install` 命令进行安装。
+以下是 BioDeploy 工具支持的所有数据库（包含多种“变体名称”，例如 `ncbi_genbank`、`kegg_pathway` 等），可以直接使用 `biodeploy install <name>` 命令进行安装。
+
+你可以用下面的命令获取**与当前代码版本严格一致**的“可下载数据库清单”：
+
+```bash
+# 以 JSON 导出全部可下载数据库（推荐，便于脚本化）
+biodeploy list --available --format json -o biodeploy-catalog.json
+
+# 以表格在终端查看
+biodeploy list --available
+```
 
 ### 核心数据库
 
@@ -146,6 +156,19 @@ biodeploy install kegg_full
 
 # 安装 CARD 抗性基因数据库
 biodeploy install card_rgi
+```
+
+### 实际使用（推荐最小可验证流程）
+
+```bash
+# 1) 先列出全部可下载数据库（可选导出）
+biodeploy list --available --format json -o biodeploy-catalog.json
+
+# 2) 选择一个体量较小/下载快的库做验证（例如 go / cog）
+biodeploy install go --path ~/bio_databases
+
+# 3) 查看安装状态并确认文件落盘
+biodeploy status go --detail
 ```
 
 ### 批量安装多个数据库

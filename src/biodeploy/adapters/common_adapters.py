@@ -55,10 +55,11 @@ GO_CONFIG = {
 
 # COG 数据库配置
 COG_CONFIG = {
-    "base_url": "https://ftp.ncbi.nih.gov/pub/COG/COG/",
+    # 最新 COG 数据（例如 COG2024）目录下文件名为 cog-24.*
+    "base_url": "https://ftp.ncbi.nih.gov/pub/COG/COG2024/data/",
     "name": "COG",
     "description": "Clusters of Orthologous Groups",
-    "files": ["cog.csv", "cognames.csv", "fun.txt"],
+    "files": ["cog-24.def.tab", "cog-24.fun.tab", "cog-24.org.csv"],
     "size": 50 * 1024 * 1024,  # 50MB
 }
 

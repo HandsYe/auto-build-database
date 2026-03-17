@@ -194,6 +194,17 @@ class NCBIAdapter(BaseAdapter):
         # 确保安装目录存在
         install_path.mkdir(parents=True, exist_ok=True)
 
+        # 兼容：source_path 可能是“下载目录”，里面包含 .gz 文件
+        if source_path.is_dir():
+            gz_files = sorted(source_path.glob("*.gz"))
+            if not gz_files:
+                raise DatabaseError(
+                    "未找到可安装的 .gz 文件",
+                    ErrorCode.INSTALL_FAILED,
+                    {"path": str(source_path)},
+                )
+            source_path = gz_files[0]
+
         # 解压文件
         if source_path.suffix == ".gz":
             self.logger.info(f"解压文件: {source_path}")

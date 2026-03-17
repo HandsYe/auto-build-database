@@ -24,52 +24,62 @@ class EggNOGAdapter(BaseAdapter):
     支持 eggNOG 正交群数据库的下载和安装。
     """
 
-    BASE_URL = "http://eggnogdb.embl.de/download/"
+    # eggNOG 5.x 下载站点（旧 eggnogdb.embl.de 已不再提供数据库文件）
+    # 参考：eggnog5.embl.de/download/emapperdb-5.0.2/
+    BASE_URL = "http://eggnog5.embl.de/download/"
     MIRRORS = {
         "main": "http://eggnogdb.embl.de/download/",
     }
 
+    # 注：不同子库的下载结构随版本变化较大；这里先提供“主 emapperdb”可用的核心文件，
+    # 其余子库后续可按实际可用 URL 继续补齐。
     DATABASE_TYPES = {
         "eggnog": {
-            "name": "eggNOG",
-            "description": "eggNOG orthologous groups database",
+            "name": "eggNOG (emapperdb)",
+            "description": "eggNOG-mapper database (emapperdb) for functional annotation",
             "files": [
-                "eggnog.db",
-                "eggnog_proteins.fasta.gz",
-                "eggnog_taxa2species.txt",
+                "eggnog.db.gz",
+                "eggnog_proteins.dmnd.gz",
+                "eggnog_proteins.fa.gz",
+                "eggnog.taxa_info.tsv.gz",
             ],
+            "subdir": "emapperdb-{version}",
         },
         "fungi": {
-            "name": "eggNOG Fungi",
-            "description": "eggNOG Fungi specific database",
+            "name": "eggNOG Fungi (emapperdb)",
+            "description": "eggNOG-mapper database (emapperdb) - fungi subset",
             "files": [
-                "fungi/eggnog_fungi.db",
-                "fungi/eggnog_fungi.proteins.fasta.gz",
+                "eggnog.db.gz",
+                "eggnog_proteins.dmnd.gz",
             ],
+            "subdir": "emapperdb-{version}",
         },
         "bacteria": {
-            "name": "eggNOG Bacteria",
-            "description": "eggNOG Bacteria specific database",
+            "name": "eggNOG Bacteria (emapperdb)",
+            "description": "eggNOG-mapper database (emapperdb) - bacteria subset",
             "files": [
-                "bacteria/eggnog_bacteria.db",
-                "bacteria/eggnog_bacteria.proteins.fasta.gz",
+                "eggnog.db.gz",
+                "eggnog_proteins.dmnd.gz",
             ],
+            "subdir": "emapperdb-{version}",
         },
         "archaea": {
-            "name": "eggNOG Archaea",
-            "description": "eggNOG Archaea specific database",
+            "name": "eggNOG Archaea (emapperdb)",
+            "description": "eggNOG-mapper database (emapperdb) - archaea subset",
             "files": [
-                "archaea/eggnog_archaea.db",
-                "archaea/eggnog_archaea.proteins.fasta.gz",
+                "eggnog.db.gz",
+                "eggnog_proteins.dmnd.gz",
             ],
+            "subdir": "emapperdb-{version}",
         },
         "metazoa": {
-            "name": "eggNOG Metazoa",
-            "description": "eggNOG Metazoa specific database",
+            "name": "eggNOG Metazoa (emapperdb)",
+            "description": "eggNOG-mapper database (emapperdb) - metazoa subset",
             "files": [
-                "metazoa/eggnog_metazoa.db",
-                "metazoa/eggnog_metazoa.proteins.fasta.gz",
+                "eggnog.db.gz",
+                "eggnog_proteins.dmnd.gz",
             ],
+            "subdir": "emapperdb-{version}",
         },
     }
 
@@ -106,8 +116,10 @@ class EggNOGAdapter(BaseAdapter):
 
         # 构建下载源
         sources = []
+        subdir_tpl = self.db_info.get("subdir", "{version}")
+        subdir = subdir_tpl.format(version=version)
         for file_pattern in self.db_info["files"]:
-            url = f"{self.BASE_URL}{version}/{file_pattern}"
+            url = f"{self.BASE_URL}{subdir}/{file_pattern}"
             sources.append(
                 DownloadSource(
                     url=url,
