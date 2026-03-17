@@ -173,7 +173,7 @@ class UninstallManager:
             已清理的数据库名称列表
         """
         cleaned = []
-        all_records = self._state_manager._storage.load_all()
+        all_records = self._state_manager._storage.load()
 
         for record in all_records:
             if not record.install_path.exists():

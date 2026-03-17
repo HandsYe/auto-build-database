@@ -17,7 +17,7 @@ from biodeploy.infrastructure.filesystem import FileSystem
 from biodeploy.infrastructure.logger import get_logger
 from biodeploy.models.state import InstallationRecord, InstallationStatus
 from biodeploy.services.checksum_service import ChecksumService
-from biodeploy.services.config_generation_service import ConfigGenerationService
+
 from biodeploy.services.download_service import DownloadService
 from biodeploy.services.environment_service import EnvironmentService
 from biodeploy.services.index_service import IndexService
@@ -48,7 +48,6 @@ class InstallationManager:
         self._download_service = DownloadService()
         self._index_service = IndexService()
         self._env_service = EnvironmentService()
-        self._config_gen = ConfigGenerationService()
         self._dep_manager = DependencyManager()
         self._logger = get_logger("installation_manager")
 
@@ -180,7 +179,15 @@ class InstallationManager:
 
             # 8. 生成配置
             self._notify_progress(progress_callback, "生成配置", 0.9)
-            record.config_files = self._config_gen.generate(record)
+            # 生成环境变量配置脚本
+            env_script_path = record.install_path / "env.sh"
+            env_vars = adapter.get_environment_variables(record.install_path, version)
+            with open(env_script_path, "w") as f:
+                f.write("#!/bin/bash\n")
+                f.write(f"# Environment configuration for {database}\n\n")
+                for key, value in env_vars.items():
+                    f.write(f'export {key}="{value}"\n')
+            record.config_files = [env_script_path]
 
             # 9. 设置环境变量
             self._notify_progress(progress_callback, "设置环境变量", 0.95)

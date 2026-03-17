@@ -50,7 +50,10 @@ class StateManager:
         Returns:
             安装记录，如果未找到返回None
         """
-        return self._storage.load(name, version)
+        records = self._storage.load(name, version)
+        if not records:
+            return None
+        return records[0]
 
     def get_database_versions(self, name: str) -> List[InstallationRecord]:
         """获取数据库的所有版本
@@ -83,7 +86,9 @@ class StateManager:
         Returns:
             如果更新成功返回True，否则返回False
         """
-        return self._storage.update_status(name, version, status, progress, error_message)
+        return self._storage.update_status(
+            name, version, status, progress, error_message
+        )
 
     def save_record(self, record: InstallationRecord) -> None:
         """保存安装记录
@@ -116,10 +121,10 @@ class StateManager:
         Returns:
             如果已安装返回True，否则返回False
         """
-        record = self._storage.load(name, version)
-        if record is None:
+        records = self._storage.load(name, version)
+        if not records:
             return False
-        return record.status == InstallationStatus.COMPLETED
+        return any(r.status == InstallationStatus.COMPLETED for r in records)
 
     def switch_version(self, name: str, version: str) -> bool:
         """切换数据库版本
@@ -135,8 +140,12 @@ class StateManager:
         """
         try:
             # 检查目标版本是否已安装
-            target_record = self._storage.load(name, version)
-            if not target_record or target_record.status != InstallationStatus.COMPLETED:
+            target_records = self._storage.load(name, version)
+            if not target_records:
+                self._logger.error(f"版本 {version} 未安装")
+                return False
+            target_record = target_records[0]
+            if target_record.status != InstallationStatus.COMPLETED:
                 self._logger.error(f"版本 {version} 未安装")
                 return False
 
@@ -151,7 +160,9 @@ class StateManager:
             # 创建新的符号链接
             default_link.symlink_to(target_record.install_path)
 
-            self._logger.info(f"切换到版本 {version}: {default_link} -> {target_record.install_path}")
+            self._logger.info(
+                f"切换到版本 {version}: {default_link} -> {target_record.install_path}"
+            )
             return True
 
         except Exception as e:
@@ -168,9 +179,10 @@ class StateManager:
         Returns:
             如果完整返回True，否则返回False
         """
-        record = self._storage.load(name, version)
-        if not record:
+        records = self._storage.load(name, version)
+        if not records:
             return False
+        record = records[0]
 
         # 检查安装路径是否存在
         if not record.install_path.exists():
@@ -191,10 +203,12 @@ class StateManager:
         Returns:
             状态摘要字典
         """
-        all_records = self._storage.load_all()
+        all_records = self._storage.load()
 
         total = len(all_records)
-        completed = sum(1 for r in all_records if r.status == InstallationStatus.COMPLETED)
+        completed = sum(
+            1 for r in all_records if r.status == InstallationStatus.COMPLETED
+        )
         failed = sum(1 for r in all_records if r.status == InstallationStatus.FAILED)
         in_progress = sum(1 for r in all_records if r.is_in_progress())
 

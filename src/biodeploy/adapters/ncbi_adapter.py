@@ -8,8 +8,9 @@ import gzip
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
+from biodeploy.adapters.adapter_registry import register_adapter
 from biodeploy.adapters.base_adapter import BaseAdapter
 from biodeploy.models.metadata import DatabaseMetadata, DownloadSource
 from biodeploy.models.errors import DatabaseError, ErrorCode
@@ -18,6 +19,7 @@ from biodeploy.services.checksum_service import ChecksumService
 from biodeploy.infrastructure.logger import get_logger
 
 
+@register_adapter
 class NCBIAdapter(BaseAdapter):
     """NCBI数据库适配器
 
@@ -29,12 +31,12 @@ class NCBIAdapter(BaseAdapter):
         "refseq_protein": {
             "name": "NCBI RefSeq Protein",
             "description": "NCBI Reference Sequence Protein Database",
-            "url_pattern": "https://ftp.ncbi.nlm.nih.gov/refseq/release/complete/complete.protein.faa.gz",
+            "url_pattern": "https://ftp.ncbi.nlm.nih.gov/refseq/release/complete/complete.{version}.protein.faa.gz",
         },
         "refseq_genomic": {
             "name": "NCBI RefSeq Genomic",
             "description": "NCBI Reference Sequence Genomic Database",
-            "url_pattern": "https://ftp.ncbi.nlm.nih.gov/refseq/release/complete/complete.genomic.fna.gz",
+            "url_pattern": "https://ftp.ncbi.nlm.nih.gov/refseq/release/complete/complete.{version}.genomic.fna.gz",
         },
         "genbank": {
             "name": "NCBI GenBank",
@@ -90,9 +92,7 @@ class NCBIAdapter(BaseAdapter):
         mirror_source = DownloadSource(
             url=self.db_info["url_pattern"]
             .format(version=version.replace(".", ""))
-            .replace(
-                "ftp.ncbi.nlm.nih.gov", "mirrors.ustc.edu.cn/ncbi"
-            ),
+            .replace("ftp.ncbi.nlm.nih.gov", "mirrors.ustc.edu.cn/ncbi"),
             protocol="https",
             priority=2,
             is_mirror=True,
@@ -120,32 +120,17 @@ class NCBIAdapter(BaseAdapter):
     def get_available_versions(self) -> List[str]:
         """获取可用版本列表
 
-        NCBI数据库通常按月发布，版本格式为YYYY.MM
-
         Returns:
             版本列表
         """
-        # 简化实现：返回最近12个月的版本
-        versions = []
-        now = datetime.now()
-
-        for i in range(12):
-            year = now.year
-            month = now.month - i
-
-            if month <= 0:
-                year -= 1
-                month += 12
-
-            versions.append(f"{year}.{month:02d}")
-
-        return versions
+        return ["1445", "1444", "1443", "1442", "1441"]
 
     def download(
         self,
         version: str,
         target_path: Path,
         options: Optional[Dict[str, Any]] = None,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> bool:
         """下载数据库
 
@@ -153,6 +138,7 @@ class NCBIAdapter(BaseAdapter):
             version: 版本号
             target_path: 目标路径
             options: 下载选项
+            progress_callback: 进度回调函数
 
         Returns:
             如果成功返回True
@@ -170,6 +156,7 @@ class NCBIAdapter(BaseAdapter):
             sources=metadata.download_sources,
             target_path=target_path / f"{self.database_name}_{version}.gz",
             options=options,
+            progress_callback=progress_callback,
         )
 
         if not result.success:

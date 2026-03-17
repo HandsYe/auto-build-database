@@ -279,3 +279,53 @@ class FileSystem:
         except Exception as e:
             logger.error(f"创建符号链接失败: {src} -> {dst}, 错误: {e}")
             return False
+
+    @staticmethod
+    def ensure_parent_directory(path: Path) -> None:
+        """确保父目录存在
+
+        Args:
+            path: 文件路径
+        """
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def safe_copy(src: Path, dst: Path, overwrite: bool = False) -> bool:
+        """安全复制文件或目录
+
+        Args:
+            src: 源路径
+            dst: 目标路径
+            overwrite: 是否覆盖
+
+        Returns:
+            如果成功返回True，否则返回False
+        """
+        src = Path(src)
+        dst = Path(dst)
+        logger = get_logger("filesystem")
+
+        if not src.exists():
+            logger.error(f"源路径不存在: {src}")
+            return False
+
+        try:
+            if dst.exists() and not overwrite:
+                logger.error(f"目标路径已存在: {dst}")
+                return False
+
+            if src.is_file():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+            elif src.is_dir():
+                if dst.exists():
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+
+            logger.debug(f"复制: {src} -> {dst}")
+            return True
+
+        except Exception as e:
+            logger.error(f"复制失败: {src} -> {dst}, 错误: {e}")
+            return False

@@ -49,6 +49,22 @@ class UpdateManager:
         self._registry = registry or AdapterRegistry()
         self._logger = get_logger("update_manager")
 
+    def check_latest_version(self, name: str) -> Optional[str]:
+        """检查数据库的最新版本
+
+        Args:
+            name: 数据库名称
+
+        Returns:
+            最新版本号，如果数据库不存在返回None
+        """
+        adapter = self._registry.get(name)
+        if not adapter:
+            self._logger.error(f"未找到适配器: {name}")
+            return None
+
+        return adapter.get_latest_version()
+
     def check_update(self, name: str) -> Optional[UpdateInfo]:
         """检查单个数据库是否有更新
 

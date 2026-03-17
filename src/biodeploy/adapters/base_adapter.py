@@ -148,7 +148,7 @@ class BaseAdapter(ABC):
         metadata = self.get_metadata(version)
         return metadata.size
 
-    def get_dependencies(self, version: str) -> List[str]:
+    def get_dependencies(self, version: Optional[str] = None) -> List[str]:
         """获取依赖
 
         Args:
@@ -161,7 +161,7 @@ class BaseAdapter(ABC):
         return metadata.dependencies
 
     def get_environment_variables(
-        self, install_path: Path, version: str
+        self, install_path: Path, version: Optional[str] = None
     ) -> Dict[str, str]:
         """获取环境变量
 
@@ -173,6 +173,7 @@ class BaseAdapter(ABC):
             环境变量字典
         """
         metadata = self.get_metadata(version)
+        version = version or metadata.version
 
         # 基本环境变量
         env_vars = {
@@ -189,3 +190,31 @@ class BaseAdapter(ABC):
                 )
 
         return env_vars
+
+    def get_download_size(self, version: Optional[str] = None) -> int:
+        """获取下载大小
+
+        Args:
+            version: 版本号
+
+        Returns:
+            下载大小（字节）
+        """
+        metadata = self.get_metadata(version)
+        return metadata.size
+
+    def get_system_requirements(self, version: Optional[str] = None) -> Dict[str, Any]:
+        """获取系统要求
+
+        Args:
+            version: 版本号
+
+        Returns:
+            系统要求字典
+        """
+        metadata = self.get_metadata(version)
+        return {
+            "min_disk_space": metadata.size * 2,  # 估算需要2倍空间
+            "min_memory": 2 * 1024 * 1024 * 1024,  # 2GB
+            "required_tools": metadata.dependencies,
+        }
