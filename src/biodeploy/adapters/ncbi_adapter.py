@@ -26,22 +26,41 @@ class NCBIAdapter(BaseAdapter):
     支持NCBI的RefSeq、GenBank、dbSNP等数据库。
     """
 
+    # NCBI FTP 基础 URL
+    BASE_URL = "https://ftp.ncbi.nlm.nih.gov"
+    MIRROR_URL = "https://mirrors.ustc.edu.cn/ncbi"
+
     # NCBI数据库类型
+    # 版本号为纯数字，如 1445, 1446
     DATABASE_TYPES = {
         "refseq_protein": {
             "name": "NCBI RefSeq Protein",
             "description": "NCBI Reference Sequence Protein Database",
-            "url_pattern": "https://ftp.ncbi.nlm.nih.gov/refseq/release/complete/complete.{version}.protein.faa.gz",
+            "path": "refseq/release/complete",
+            "file_pattern": "complete.{version}.protein.faa.gz",
+            "version_range": range(1441, 1460),  # 支持的版本范围
         },
         "refseq_genomic": {
             "name": "NCBI RefSeq Genomic",
-            "description": "NCBI Reference Sequence Genomic Database",
-            "url_pattern": "https://ftp.ncbi.nlm.nih.gov/refseq/release/complete/complete.{version}.genomic.fna.gz",
+            "description": "NCBI Reference Sequence Genomic Database (first part)",
+            "path": "refseq/release/complete",
+            "file_pattern": "complete.{version}.1.genomic.fna.gz",
+            "version_range": range(1441, 1460),
+        },
+        "refseq_wp_protein": {
+            "name": "NCBI RefSeq WP Protein",
+            "description": "NCBI Reference Sequence Whole Proteome Protein Database",
+            "path": "refseq/release/complete",
+            "file_pattern": "complete.wp_protein.{version}.protein.faa.gz",
+            "version_range": range(1, 150),
         },
         "genbank": {
             "name": "NCBI GenBank",
-            "description": "NCBI GenBank Sequence Database",
-            "url_pattern": "https://ftp.ncbi.nlm.nih.gov/genbank/gb{version}.seq.gz",
+            "description": "NCBI GenBank Sequence Database (divided by organism groups)",
+            "path": "genbank",
+            # GenBank 使用分段文件格式：gb{division}{number}.seq.gz
+            "divisions": ["bct", "inv", "mam", "phg", "pln", "pri", "rod", "vrl", "vrt"],
+            "file_range": range(1, 200),
         },
     }
 
@@ -71,7 +90,7 @@ class NCBIAdapter(BaseAdapter):
         """获取数据库元数据
 
         Args:
-            version: 版本号，格式为YYYY.MM
+            version: 版本号，RefSeq使用纯数字（如1445）
 
         Returns:
             数据库元数据
@@ -79,25 +98,65 @@ class NCBIAdapter(BaseAdapter):
         if version is None:
             version = self.get_latest_version()
 
-        # 创建下载源
-        primary_source = DownloadSource(
-            url=self.db_info["url_pattern"].format(version=version.replace(".", "")),
-            protocol="https",
-            priority=1,
-            is_mirror=False,
-            region="US",
-        )
+        sources = []
+        file_count = 1
 
-        # 中国镜像
-        mirror_source = DownloadSource(
-            url=self.db_info["url_pattern"]
-            .format(version=version.replace(".", ""))
-            .replace("ftp.ncbi.nlm.nih.gov", "mirrors.ustc.edu.cn/ncbi"),
-            protocol="https",
-            priority=2,
-            is_mirror=True,
-            region="CN",
-        )
+        if self.db_type == "genbank":
+            # GenBank 使用多个分部文件
+            divisions = self.db_info.get("divisions", ["bct"])
+            file_range = self.db_info.get("file_range", range(1, 200))
+
+            for division in divisions:
+                for num in file_range:
+                    file_name = f"gb{division}{num}.seq.gz"
+                    # 主站点
+                    sources.append(
+                        DownloadSource(
+                            url=f"{self.BASE_URL}/{self.db_info['path']}/{file_name}",
+                            protocol="https",
+                            priority=1,
+                            is_mirror=False,
+                            region="US",
+                        )
+                    )
+                    # 镜像站点
+                    sources.append(
+                        DownloadSource(
+                            url=f"{self.MIRROR_URL}/{self.db_info['path']}/{file_name}",
+                            protocol="https",
+                            priority=2,
+                            is_mirror=True,
+                            region="CN",
+                        )
+                    )
+            file_count = len(divisions) * len(list(file_range)) * 2
+        else:
+            # RefSeq 使用单一文件
+            file_pattern = self.db_info.get("file_pattern", "")
+            file_name = file_pattern.format(version=version)
+            path = self.db_info.get("path", "")
+
+            # 主站点
+            sources.append(
+                DownloadSource(
+                    url=f"{self.BASE_URL}/{path}/{file_name}",
+                    protocol="https",
+                    priority=1,
+                    is_mirror=False,
+                    region="US",
+                )
+            )
+            # 镜像站点
+            sources.append(
+                DownloadSource(
+                    url=f"{self.MIRROR_URL}/{path}/{file_name}",
+                    protocol="https",
+                    priority=2,
+                    is_mirror=True,
+                    region="CN",
+                )
+            )
+            file_count = 2
 
         return DatabaseMetadata(
             name=self.database_name,
@@ -105,9 +164,9 @@ class NCBIAdapter(BaseAdapter):
             display_name=self.db_info["name"],
             description=self.db_info["description"],
             size=1024 * 1024 * 1024 * 5,  # 5GB (估计值)
-            file_count=1,
-            formats=["fasta"],
-            download_sources=[primary_source, mirror_source],
+            file_count=file_count,
+            formats=["fasta", "genbank"],
+            download_sources=sources,
             checksums={},
             dependencies=["wget", "gunzip"],
             license="Public Domain",
@@ -123,7 +182,24 @@ class NCBIAdapter(BaseAdapter):
         Returns:
             版本列表
         """
-        return ["1445", "1444", "1443", "1442", "1441"]
+        if self.db_type == "genbank":
+            # GenBank 没有版本号概念
+            return ["latest"]
+
+        version_range = self.db_info.get("version_range", range(1441, 1450))
+        return [str(v) for v in sorted(version_range, reverse=True)]
+
+    def get_latest_version(self) -> str:
+        """获取最新版本
+
+        Returns:
+            最新版本号
+        """
+        if self.db_type == "genbank":
+            return "latest"
+
+        versions = self.get_available_versions()
+        return versions[0] if versions else "1445"
 
     def download(
         self,

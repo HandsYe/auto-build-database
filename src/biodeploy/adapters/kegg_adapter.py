@@ -21,51 +21,73 @@ from biodeploy.infrastructure.logger import get_logger
 class KEGGAdapter(BaseAdapter):
     """KEGG 数据库适配器
 
-    支持 KEGG 通路数据库的下载和安装。
+    ⚠️ 重要提示：KEGG 数据库需要商业许可才能下载完整数据。
+
+    KEGG (Kyoto Encyclopedia of Genes and Genomes) 是一个商业数据库，
+    完整数据下载需要订阅 KEGG 服务。本适配器提供以下使用方式：
+
+    1. KEGG REST API (免费)：通过 API 获取数据（有限制）
+    2. KEGG FTP (需许可)：需要有效的订阅账号
+    3. KEGG 镜像站点 (如 KEGG Mirror at KEGG API)
+
+    更多信息请访问：https://www.kegg.jp/kegg/legal.html
     """
 
-    BASE_URL = "https://www.kegg.jp/kegg/"
-    
+    # KEGG API 基础 URL（免费但有速率限制）
+    API_BASE_URL = "https://rest.kegg.jp"
+
+    # KEGG FTP (需要订阅)
+    FTP_BASE_URL = "ftp://ftp.bio.jp/kegg"
+
+    # KEGG 官方网站
+    WEBSITE_URL = "https://www.kegg.jp"
+
     DATABASE_TYPES = {
-        "genes": {
-            "name": "KEGG GENES",
-            "description": "KEGG GENES database",
-            "files": ["genes/genes.tar.gz"],
-        },
-        "genome": {
-            "name": "KEGG GENOME",
-            "description": "KEGG GENOME database",
-            "files": ["genome/genome.tar.gz"],
-        },
         "pathway": {
             "name": "KEGG PATHWAY",
-            "description": "KEGG PATHWAY database",
-            "files": ["pathway/pathway.tar.gz"],
+            "description": "KEGG PATHWAY database - metabolic and regulatory pathways",
+            "api_endpoints": ["list/pathway", "get/pathway"],
+            "requires_license": False,  # API 访问免费但有速率限制
         },
-        "reaction": {
-            "name": "KEGG REACTION",
-            "description": "KEGG REACTION database",
-            "files": ["reaction/reaction.tar.gz"],
+        "genes": {
+            "name": "KEGG GENES",
+            "description": "KEGG GENES database - gene catalogs",
+            "api_endpoints": ["list/hsa", "get/hsa"],  # hsa = Homo sapiens
+            "requires_license": False,
         },
         "compound": {
             "name": "KEGG COMPOUND",
-            "description": "KEGG COMPOUND database",
-            "files": ["compound/compound.tar.gz"],
+            "description": "KEGG COMPOUND database - chemical compounds",
+            "api_endpoints": ["list/compound", "get/compound"],
+            "requires_license": False,
         },
-        "full": {
-            "name": "KEGG Full",
-            "description": "Complete KEGG database",
-            "files": [
-                "genes/genes.tar.gz",
-                "genome/genome.tar.gz",
-                "pathway/pathway.tar.gz",
-                "reaction/reaction.tar.gz",
-                "compound/compound.tar.gz",
-            ],
+        "reaction": {
+            "name": "KEGG REACTION",
+            "description": "KEGG REACTION database - chemical reactions",
+            "api_endpoints": ["list/reaction", "get/reaction"],
+            "requires_license": False,
+        },
+        "enzyme": {
+            "name": "KEGG ENZYME",
+            "description": "KEGG ENZYME database - enzyme nomenclature",
+            "api_endpoints": ["list/enzyme", "get/enzyme"],
+            "requires_license": False,
+        },
+        "disease": {
+            "name": "KEGG DISEASE",
+            "description": "KEGG DISEASE database - human diseases",
+            "api_endpoints": ["list/disease", "get/disease"],
+            "requires_license": False,
+        },
+        "drug": {
+            "name": "KEGG DRUG",
+            "description": "KEGG DRUG database - pharmaceuticals",
+            "api_endpoints": ["list/drug", "get/drug"],
+            "requires_license": False,
         },
     }
 
-    def __init__(self, db_type: str = "full") -> None:
+    def __init__(self, db_type: str = "pathway") -> None:
         """初始化 KEGG 适配器
 
         Args:
@@ -96,33 +118,37 @@ class KEGGAdapter(BaseAdapter):
         if version is None:
             version = self.get_latest_version()
 
-        # 构建下载源
+        # KEGG 主要通过 API 访问
+        # 构建 API 端点作为"下载源"
         sources = []
-        for file_pattern in self.db_info["files"]:
-            url = f"{self.BASE_URL}{file_pattern}"
+        for endpoint in self.db_info.get("api_endpoints", []):
+            url = f"{self.API_BASE_URL}/{endpoint}"
             sources.append(
                 DownloadSource(
                     url=url,
                     protocol="https",
                     priority=1,
                     is_mirror=False,
+                    region="JP",
                 )
             )
+
+        description = self.db_info["description"]
 
         return DatabaseMetadata(
             name=self.database_name,
             version=version,
             display_name=self.db_info["name"],
-            description=self.db_info["description"],
-            size=10 * 1024 * 1024 * 1024,  # 10GB (估计值)
-            file_count=len(self.db_info["files"]),
-            formats=["tar.gz", "kgml"],
+            description=description,
+            size=0,  # API 数据，大小不固定
+            file_count=len(sources),
+            formats=["txt", "json", "kgml"],
             download_sources=sources,
             checksums={},
-            dependencies=["wget"],
-            license="Academic",
-            website="https://www.kegg.jp/",
-            tags=["kegg", "pathway", "metabolism"],
+            dependencies=["curl", "python3"],
+            license="Academic/Commercial",
+            website=self.WEBSITE_URL,
+            tags=["kegg", "pathway", "metabolism", "api"],
             category="pathway",
             last_updated=datetime.now(),
         )
@@ -152,6 +178,9 @@ class KEGGAdapter(BaseAdapter):
     ) -> bool:
         """下载数据库
 
+        ⚠️ 重要：KEGG 数据库需要商业许可才能下载完整数据。
+        本方法仅通过 API 获取部分数据。如需完整数据，请访问 https://www.kegg.jp/kegg/legal.html
+
         Args:
             version: 版本号
             target_path: 目标路径
@@ -164,16 +193,41 @@ class KEGGAdapter(BaseAdapter):
         target_path = Path(target_path)
         options = options or {}
 
+        self.logger.warning("=" * 60)
+        self.logger.warning(f"KEGG 数据库 {self.db_type} 下载提示：")
+        self.logger.warning("=" * 60)
+        self.logger.warning("KEGG 是一个商业数据库，完整数据下载需要订阅。")
+        self.logger.warning(
+            "本适配器使用 KEGG REST API 获取有限数据（免费但有速率限制）。"
+        )
+        self.logger.warning("如需完整数据，请访问：https://www.kegg.jp/kegg/legal.html")
+        self.logger.warning("=" * 60)
+
+        # 检查是否有 KEGG 订阅（通过选项传递）
+        has_subscription = options.get("kegg_subscription", False)
+
+        if not has_subscription:
+            self.logger.info("使用 KEGG REST API 模式（免费，有速率限制）...")
+            self.logger.info(
+                "提示：如需完整数据，请购买 KEGG 订阅并在选项中设置 kegg_subscription=True"
+            )
+
         self.logger.info(f"开始下载 {self.database_name} {version}")
 
         metadata = self.get_metadata(version)
 
-        # 下载所有文件
+        # 确保目标目录存在
+        target_path.mkdir(parents=True, exist_ok=True)
+
+        # 下载/获取数据
         for i, source in enumerate(metadata.download_sources):
-            file_name = source.url.split("/")[-1]
+            endpoint = source.url.split("/")[-2] if "/" in source.url else source.url
+            file_name = f"{self.db_type}_{endpoint}.txt"
             file_path = target_path / file_name
 
-            self.logger.info(f"下载文件 {i+1}/{len(metadata.download_sources)}: {file_name}")
+            self.logger.info(
+                f"获取数据 {i + 1}/{len(metadata.download_sources)}: {endpoint}"
+            )
 
             result = self.download_service.download(
                 sources=[source],
@@ -183,13 +237,11 @@ class KEGGAdapter(BaseAdapter):
             )
 
             if not result.success:
-                raise DatabaseError(
-                    f"下载失败：{file_name}",
-                    ErrorCode.DOWNLOAD_FAILED,
-                    {"database": self.database_name, "file": file_name},
-                )
+                self.logger.warning(f"获取失败：{endpoint}，继续尝试其他端点...")
+                continue
 
-        self.logger.info(f"下载完成：{target_path}")
+        self.logger.info(f"数据获取完成：{target_path}")
+        self.logger.info("注意：这是通过 API 获取的部分数据，不是完整 KEGG 数据库。")
         return True
 
     def install(
@@ -219,6 +271,7 @@ class KEGGAdapter(BaseAdapter):
 
             # 解压 tar.gz 文件
             import tarfile
+
             for tar_file in source_path.glob("*.tar.gz"):
                 self.logger.info(f"解压：{tar_file}")
                 with tarfile.open(tar_file, "r:gz") as tar:

@@ -115,19 +115,25 @@ class AdapterRegistry:
             if name.startswith("ensembl_"):
                 from biodeploy.adapters.ensembl_adapter import EnsemblAdapter
 
-                db_type = name.removeprefix("ensembl_")
+                rest = name.removeprefix("ensembl_")
+                # 支持格式: ensembl_{db_type} 或 ensembl_{db_type}_{species}
+                parts = rest.split("_", 1)
+                db_type = parts[0]
+                species = parts[1] if len(parts) > 1 else "homo_sapiens"
                 if db_type in getattr(EnsemblAdapter, "DATABASE_TYPES", {}):
-                    return EnsemblAdapter(db_type=db_type)
+                    return EnsemblAdapter(db_type=db_type, species=species)
 
             if name.startswith("ucsc_"):
                 from biodeploy.adapters.ucsc_adapter import UCSCAdapter
 
                 rest = name.removeprefix("ucsc_")
-                parts = rest.split("_", 1)
-                if len(parts) == 2:
-                    db_name, genome = parts
-                    if db_name in getattr(UCSCAdapter, "DATABASES", {}):
-                        return UCSCAdapter(db_name=db_name, genome=genome)
+                parts = rest.split("_", 2)
+                if len(parts) >= 2:
+                    db_type = parts[0]
+                    genome = parts[1]
+                    file_type = parts[2] if len(parts) > 2 else "fasta"
+                    if db_type in getattr(UCSCAdapter, "DATABASE_TYPES", {}):
+                        return UCSCAdapter(db_type=db_type, genome=genome, file_type=file_type)
 
         except Exception:
             # 动态解析不应影响主流程；失败则返回None，让上层报“未找到适配器”
@@ -178,9 +184,13 @@ class AdapterRegistry:
 
             # UCSC 的 genome 种类很多，这里只列常用基因组版本，保证“简单易用”
             popular_genomes = ["hg38", "hg19", "mm39", "mm10"]
-            for db_name in getattr(UCSCAdapter, "DATABASES", {}).keys():
+            for db_type in getattr(UCSCAdapter, "DATABASE_TYPES", {}).keys():
                 for genome in popular_genomes:
-                    names.add(f"ucsc_{db_name}_{genome}")
+                    if db_type == "genome":
+                        for file_type in ["fasta", "2bit"]:
+                            names.add(f"ucsc_{db_type}_{genome}_{file_type}")
+                    else:
+                        names.add(f"ucsc_{db_type}_{genome}")
         except Exception:
             pass
 

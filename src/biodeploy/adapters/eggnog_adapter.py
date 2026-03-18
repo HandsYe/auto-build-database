@@ -24,12 +24,14 @@ class EggNOGAdapter(BaseAdapter):
     支持 eggNOG 正交群数据库的下载和安装。
     """
 
-    # eggNOG 5.x 下载站点（旧 eggnogdb.embl.de 已不再提供数据库文件）
-    # 参考：eggnog5.embl.de/download/emapperdb-5.0.2/
+    # eggNOG 5.x 下载站点
+    # 主站点：eggnog5.embl.de/download/
+    # 版本 5.0.2 是目前最新稳定版本
     BASE_URL = "http://eggnog5.embl.de/download/"
-    MIRRORS = {
-        "main": "http://eggnogdb.embl.de/download/",
-    }
+
+    # 支持的版本
+    SUPPORTED_VERSIONS = ["5.0.2", "5.0.1", "5.0.0"]
+    LATEST_VERSION = "5.0.2"
 
     # 注：不同子库的下载结构随版本变化较大；这里先提供“主 emapperdb”可用的核心文件，
     # 其余子库后续可按实际可用 URL 继续补齐。

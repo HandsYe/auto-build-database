@@ -16,17 +16,18 @@ def test_list_adapters_includes_variants():
     assert "ncbi_refseq_genomic" in names
     assert "ncbi_genbank" in names
 
-    # KEGG variants
-    assert "kegg_full" in names
+    # KEGG variants (移除了 full，因为它需要商业许可)
     assert "kegg_pathway" in names
+    assert "kegg_genes" in names
 
     # eggNOG variants
     assert "eggnog_eggnog" in names
     assert "eggnog_bacteria" in names
 
-    # UCSC common genomes
-    assert "ucsc_genome_hg38" in names
-    assert "ucsc_genome_hg19" in names
+    # UCSC common genomes (新格式包含 file_type)
+    assert "ucsc_genome_hg38_fasta" in names
+    assert "ucsc_genome_hg38_2bit" in names
+    assert "ucsc_genome_hg19_fasta" in names
 
 
 def test_get_resolves_dynamic_adapter_instances():
@@ -44,7 +45,7 @@ def test_get_resolves_dynamic_adapter_instances():
     assert eggnog is not None
     assert eggnog.database_name == "eggnog_bacteria"
 
-    ucsc = registry.get("ucsc_genome_hg38")
+    ucsc = registry.get("ucsc_genome_hg38_fasta")
     assert ucsc is not None
-    assert ucsc.database_name == "ucsc_genome_hg38"
+    assert ucsc.database_name == "ucsc_genome_hg38_fasta"
 
